@@ -60,7 +60,7 @@ tools = [get_weather, search_movies, change__to_f]
 
 # --- 2. Initialize Model & Agent ---
 # Retrieve the key from the OS environment instead of Colab's userdata
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GEMINI_API_KEY = os.environ.get("AQ.Ab8RN6Jvrz_MqQQ32kNZPlByAW06EoUYQpBmgqk5L086xQTO-g")
 
 llm_flash = ChatGoogleGenerativeAI(
     model="gemma-4-31b-it",
