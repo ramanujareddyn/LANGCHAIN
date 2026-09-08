@@ -14,45 +14,112 @@ from langchain.agents import create_agent
 
 
 # ============================================================
-# 1. TOOLS
+# 1. API KEY
+# ============================================================
+
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+
+if not GEMINI_API_KEY:
+    raise RuntimeError(
+        "GEMINI_API_KEY environment variable is not set."
+    )
+
+
+# ============================================================
+# 2. TOOLS
 # ============================================================
 
 @tool
 def search_movies(genre: str) -> str:
-    """Search for Indian movies by genre."""
+    """
+    Search for Indian movies by genre.
+    """
 
     movies = {
-        "sci-fi": "Cargo, 2.0, Mr. India",
-        "comedy": "3 Idiots, Hera Pheri, Munna Bhai M.B.B.S.",
-        "action": "RRR, Vikram, Baahubali",
-        "drama": "12th Fail, Dangal, Taare Zameen Par",
-        "thriller": "Drishyam, Andhadhun, Ratsasan",
-        "romance": "Jab We Met, Sita Ramam, 96"
+        "sci-fi": [
+            "Cargo",
+            "2.0",
+            "Mr. India"
+        ],
+
+        "comedy": [
+            "3 Idiots",
+            "Hera Pheri",
+            "Munna Bhai M.B.B.S."
+        ],
+
+        "action": [
+            "RRR",
+            "Vikram",
+            "Baahubali"
+        ],
+
+        "drama": [
+            "12th Fail",
+            "Dangal",
+            "Taare Zameen Par"
+        ],
+
+        "thriller": [
+            "Drishyam",
+            "Andhadhun",
+            "Ratsasan"
+        ],
+
+        "romance": [
+            "Jab We Met",
+            "Sita Ramam",
+            "96"
+        ]
     }
 
-    return movies.get(
-        genre.lower(),
-        "No movies found for that genre."
+    genre = genre.lower().strip()
+
+    if genre in movies:
+        return (
+            f"Indian {genre} movies: "
+            + ", ".join(movies[genre])
+        )
+
+    return (
+        f"No movies found for genre '{genre}'. "
+        f"Available genres: "
+        f"{', '.join(movies.keys())}"
     )
 
 
+# ============================================================
+# 3. CELSIUS TO FAHRENHEIT
+# ============================================================
+
 @tool
 def change__to_f(temp_c: float) -> float:
-    """Convert Celsius temperature to Fahrenheit."""
+    """
+    Convert Celsius temperature to Fahrenheit.
+    """
 
     return round((temp_c * 1.8) + 32, 2)
 
 
+# ============================================================
+# 4. WEATHER TOOL
+# ============================================================
+
 @tool
 def get_weather(city: str) -> str:
-    """Get current weather for an Indian city."""
+    """
+    Get the current weather for an Indian city.
+    """
 
     try:
+
         # ----------------------------------------------------
-        # Geocoding
+        # GEOCODING API
         # ----------------------------------------------------
 
-        geo_url = "https://geocoding-api.open-meteo.com/v1/search"
+        geo_url = (
+            "https://geocoding-api.open-meteo.com/v1/search"
+        )
 
         geo_params = {
             "name": city,
@@ -71,8 +138,10 @@ def get_weather(city: str) -> str:
 
         geo_data = geo_response.json()
 
-        if "results" not in geo_data:
-            return f"Could not find weather data for {city}."
+        if not geo_data.get("results"):
+            return (
+                f"Could not find the city '{city}'."
+            )
 
         location = geo_data["results"][0]
 
@@ -80,15 +149,22 @@ def get_weather(city: str) -> str:
         longitude = location["longitude"]
 
         # ----------------------------------------------------
-        # Weather
+        # WEATHER API
         # ----------------------------------------------------
 
-        weather_url = "https://api.open-meteo.com/v1/forecast"
+        weather_url = (
+            "https://api.open-meteo.com/v1/forecast"
+        )
 
         weather_params = {
             "latitude": latitude,
             "longitude": longitude,
-            "current": "temperature_2m,weather_code",
+            "current": (
+                "temperature_2m,"
+                "relative_humidity_2m,"
+                "apparent_temperature,"
+                "weather_code"
+            ),
             "temperature_unit": "celsius"
         }
 
@@ -105,23 +181,42 @@ def get_weather(city: str) -> str:
         current = weather_data["current"]
 
         result = {
-            "resolved_city": location["name"],
-            "country": location.get("country", "India"),
-            "temperature_celsius": current["temperature_2m"],
-            "weather_code": current["weather_code"]
+            "city": location["name"],
+            "country": location.get(
+                "country",
+                "India"
+            ),
+            "temperature_celsius": current[
+                "temperature_2m"
+            ],
+            "feels_like_celsius": current[
+                "apparent_temperature"
+            ],
+            "humidity_percent": current[
+                "relative_humidity_2m"
+            ],
+            "weather_code": current[
+                "weather_code"
+            ]
         }
 
         return json.dumps(result)
 
     except requests.RequestException as e:
-        return f"Weather service error: {str(e)}"
+
+        return (
+            f"Weather API request failed: {str(e)}"
+        )
 
     except Exception as e:
-        return f"Unable to get weather information: {str(e)}"
+
+        return (
+            f"Unable to get weather information: {str(e)}"
+        )
 
 
 # ============================================================
-# 2. TOOLS LIST
+# 5. TOOL LIST
 # ============================================================
 
 tools = [
@@ -132,143 +227,201 @@ tools = [
 
 
 # ============================================================
-# 3. GEMINI API KEY
+# 6. GEMINI MODEL
 # ============================================================
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
-
-if not GEMINI_API_KEY:
-    raise RuntimeError(
-        "GEMINI_API_KEY environment variable is not set."
-    )
-
-
-# ============================================================
-# 4. GEMINI MODEL
-# ============================================================
-
-llm_flash = ChatGoogleGenerativeAI(
-    model="gemma-4-31b-it",
-    api_key=GEMINI_API_KEY,
+llm = ChatGoogleGenerativeAI(
+    model="gemini-2.5-flash",
+    google_api_key=GEMINI_API_KEY,
     temperature=0
 )
 
 
 # ============================================================
-# 5. CREATE AGENT
+# 7. CREATE AGENT
 # ============================================================
 
 agent = create_agent(
-    model=llm_flash,
+    model=llm,
     tools=tools,
-    system_prompt=(
-        "You are an Indian Weather and Cinema Agent.\n\n"
 
-        "You are ONLY authorized to answer questions related to:\n"
-        "1. Weather in India\n"
-        "2. Indian movies and cinema\n\n"
+    system_prompt="""
+You are an Indian Weather and Cinema Agent.
 
-        "For weather questions, use the get_weather tool.\n"
-        "For movie genre questions, use the search_movies tool.\n"
-        "For Celsius to Fahrenheit conversion, use the "
-        "change__to_f tool when relevant.\n\n"
+You are ONLY authorized to answer questions about:
 
-        "If the user asks about anything outside Indian weather "
-        "and Indian cinema, you must say exactly:\n"
-        "'I am not authorized to answer questions outside of "
-        "Indian weather and cinema.'"
-    )
+1. Weather in India
+2. Indian movies and Indian cinema
+
+For weather questions:
+- Use the get_weather tool.
+- Give the temperature clearly.
+- Mention the city.
+- Give useful weather information from the tool.
+
+For Indian movie questions:
+- Use the search_movies tool when the user asks for movies by genre.
+- Recommend Indian movies only.
+
+For Celsius to Fahrenheit conversion:
+- Use the change__to_f tool when appropriate.
+
+IMPORTANT:
+If the user asks about anything outside Indian weather,
+Indian movies, Indian cinema, or temperature conversion,
+you MUST reply exactly:
+
+I am not authorized to answer questions outside of Indian weather and cinema.
+
+Do not answer unrelated general knowledge questions.
+"""
 )
 
 
 # ============================================================
-# 6. INPUT MODEL
+# 8. INPUT MODEL
 # ============================================================
 
 class AgentInput(BaseModel):
     input: str = Field(
-        description="Your message to the Indian Weather and Cinema Agent"
+        description="Message for the Indian Weather and Cinema Agent"
     )
 
 
 # ============================================================
-# 7. FORMAT INPUT
+# 9. FORMAT INPUT
 # ============================================================
 
-def format_for_agent(x) -> dict:
+def format_for_agent(x):
 
     if isinstance(x, dict):
-        user_input = x["input"]
+
+        user_input = x.get("input", "")
+
     else:
+
         user_input = x.input
 
     return {
         "messages": [
-            ("user", user_input)
+            {
+                "role": "user",
+                "content": user_input
+            }
         ]
     }
 
 
 # ============================================================
-# 8. EXTRACT AGENT RESPONSE
+# 10. EXTRACT RESPONSE
 # ============================================================
 
-def extract_text_response(agent_output) -> str:
-
-    if not isinstance(agent_output, dict):
-        return str(agent_output)
+def extract_text_response(agent_output):
 
     # --------------------------------------------------------
-    # Normal LangGraph response
+    # If already a string
     # --------------------------------------------------------
 
-    messages = agent_output.get("messages")
+    if isinstance(agent_output, str):
+        return agent_output
 
     # --------------------------------------------------------
-    # Search nested values if messages are not at top level
+    # If dictionary
     # --------------------------------------------------------
 
-    if messages is None:
+    if isinstance(agent_output, dict):
 
-        for value in agent_output.values():
-
-            if (
-                isinstance(value, dict)
-                and "messages" in value
-            ):
-                messages = value["messages"]
-                break
-
-    # --------------------------------------------------------
-    # Extract final message
-    # --------------------------------------------------------
-
-    if messages:
-
-        last_message = messages[-1]
-
-        content = getattr(
-            last_message,
-            "content",
-            None
+        messages = agent_output.get(
+            "messages"
         )
 
-        if content is not None:
+        # ----------------------------------------------------
+        # Find messages in nested objects
+        # ----------------------------------------------------
 
-            # Some Gemini/LangChain responses can return
-            # structured content.
-            if isinstance(content, str):
-                return content
+        if messages is None:
 
-            return str(content)
+            for value in agent_output.values():
 
-        return str(last_message)
+                if (
+                    isinstance(value, dict)
+                    and "messages" in value
+                ):
+
+                    messages = value["messages"]
+
+                    break
+
+        # ----------------------------------------------------
+        # Extract last message
+        # ----------------------------------------------------
+
+        if messages:
+
+            last_message = messages[-1]
+
+            content = getattr(
+                last_message,
+                "content",
+                None
+            )
+
+            if content is None:
+
+                if isinstance(
+                    last_message,
+                    dict
+                ):
+
+                    content = last_message.get(
+                        "content"
+                    )
+
+            if content is not None:
+
+                # Gemini may sometimes return
+                # structured content.
+
+                if isinstance(
+                    content,
+                    str
+                ):
+
+                    return content
+
+                if isinstance(
+                    content,
+                    list
+                ):
+
+                    text_parts = []
+
+                    for item in content:
+
+                        if isinstance(
+                            item,
+                            dict
+                        ):
+
+                            if "text" in item:
+
+                                text_parts.append(
+                                    item["text"]
+                                )
+
+                    if text_parts:
+
+                        return "\n".join(
+                            text_parts
+                        )
+
+                return str(content)
 
     return str(agent_output)
 
 
 # ============================================================
-# 9. CREATE LANGCHAIN CHAIN
+# 11. CREATE LANGCHAIN CHAIN
 # ============================================================
 
 formatted_agent_chain = (
@@ -282,13 +435,13 @@ formatted_agent_chain = (
 
 
 # ============================================================
-# 10. FASTAPI APPLICATION
+# 12. FASTAPI APP
 # ============================================================
 
 app = FastAPI(
     title="Indian Weather and Cinema Agent",
     description=(
-        "AI agent for Indian weather and Indian cinema "
+        "AI Agent for Indian weather and Indian cinema "
         "using LangChain, Gemini and LangServe."
     ),
     version="1.0.0"
@@ -296,7 +449,7 @@ app = FastAPI(
 
 
 # ============================================================
-# 11. HOME / HEALTH ROUTE
+# 13. HOME ROUTE
 # ============================================================
 
 @app.get("/")
@@ -304,14 +457,18 @@ def home():
 
     return {
         "status": "online",
-        "message": "Indian Weather and Cinema Agent is running",
+        "message": (
+            "Indian Weather and Cinema Agent "
+            "is running successfully."
+        ),
         "playground": "/agent/playground/",
-        "docs": "/docs"
+        "docs": "/docs",
+        "health": "/health"
     }
 
 
 # ============================================================
-# 12. HEALTH CHECK
+# 14. HEALTH ROUTE
 # ============================================================
 
 @app.get("/health")
@@ -323,7 +480,7 @@ def health():
 
 
 # ============================================================
-# 13. LANGSERVE ROUTE
+# 15. LANGSERVE ROUTE
 # ============================================================
 
 add_routes(
@@ -335,13 +492,16 @@ add_routes(
 
 
 # ============================================================
-# 14. RUN SERVER
+# 16. RUN SERVER
 # ============================================================
 
 if __name__ == "__main__":
 
     port = int(
-        os.environ.get("PORT", 8000)
+        os.environ.get(
+            "PORT",
+            8000
+        )
     )
 
     uvicorn.run(
